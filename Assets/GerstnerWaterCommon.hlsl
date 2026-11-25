@@ -4,7 +4,7 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-#define MAX_WAVES 16
+#define MAX_WAVES 128
 
 CBUFFER_START(UnityPerMaterial)
     float4 _DeepColor;
@@ -49,12 +49,12 @@ SAMPLER(sampler_SkyCube);
 float4 _SkyCube_HDR;
 
 // Per wave data, filled by GerstnerWaveController (Material.SetVectorArray)
-// _WaveA = (dir.x, dir.z, amplitude, k)       k = 2*PI / wavelength
-// _WaveB = (steepness Q, omega, phase, unused)
+// _GerstnerWaveA = (dir.x, dir.z, amplitude, k)       k = 2*PI / wavelength
+// _GerstnerWaveB = (steepness Q, omega, phase, unused)
 // Arrays live outside the cbuffer, so this shader isn't SRP Batcher compatible.
 // That's fine for a single water surface.
-float4 _WaveA[MAX_WAVES];
-float4 _WaveB[MAX_WAVES];
+float4 _GerstnerWaveA[MAX_WAVES];
+float4 _GerstnerWaveB[MAX_WAVES];
 
 struct Varyings
 {
@@ -86,8 +86,8 @@ float3 GerstnerWaves(float2 p, float t, out float3 normal, out float crest)
     [loop]
     for (int i = 0; i < count; i++)
     {
-        float4 a = _WaveA[i];
-        float4 b = _WaveB[i];
+        float4 a = _GerstnerWaveA[i];
+        float4 b = _GerstnerWaveB[i];
 
         float2 d   = a.xy;
         float  amp = a.z;

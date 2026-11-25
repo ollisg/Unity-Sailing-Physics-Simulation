@@ -43,21 +43,21 @@ Material:
     - _DeckBlend: 0.346
     - _DeckMinHeight: 0.12
     - _DeckMinNormalY: 0.322
-    - _GelcoatSmoothness: 0.85
-    - _GrimeStrength: 0.523
+    - _GelcoatSmoothness: 0.413
+    - _GrimeStrength: 0.504
     - _NonSkidNormalStrength: 1.165
     - _NonSkidSmoothness: 0.453
     - _NonSkidTileSize: 0.1
-    - _ScratchStrength: 0.504
-    - _VariationStrength: 0.0763
+    - _ScratchStrength: 0.567
+    - _VariationStrength: 0.0378
     - _VariationTileSize: 0.2
     - _WaterlineHeight: 0.2
     - _WaterlineWidth: 0.02
     m_Colors:
     - _BelowWaterTint: {r: 0.92, g: 0.95, b: 0.94, a: 1}
     - _GelcoatColor: {r: 0.3490566, g: 0.3490566, b: 0.3490566, a: 1}
-    - _GrimeColor: {r: 0.55, g: 0.52, b: 0.45, a: 1}
-    - _NonSkidColor: {r: 0.8301887, g: 0, b: 0.072235726, a: 1}
+    - _GrimeColor: {r: 0.7264151, g: 0.58729976, b: 0.22957456, a: 1}
+    - _NonSkidColor: {r: 0, g: 0, b: 0, a: 1}
     - _WaterlineColor: {r: 0.72, g: 0.68, b: 0.54999995, a: 0.12941177}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
