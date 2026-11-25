@@ -23,10 +23,10 @@ RenderSettings:
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
-  m_AmbientIntensity: 1
+  m_AmbientIntensity: 3.26
   m_AmbientMode: 0
-  m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SubtractiveShadowColor: {r: 0.735849, g: 0.735849, b: 0.735849, a: 1}
+  m_SkyboxMaterial: {fileID: 2100000, guid: 09dc111fa814b4eb69c287ee114de5a6, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -37,7 +37,7 @@ RenderSettings:
   m_ReflectionBounces: 1
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
-  m_Sun: {fileID: 0}
+  m_Sun: {fileID: 410087040}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -444,6 +444,7 @@ GameObject:
   - component: {fileID: 1754560831}
   - component: {fileID: 1754560830}
   - component: {fileID: 1754560829}
+  - component: {fileID: 1754560833}
   m_Layer: 0
   m_Name: Ocean
   m_TagString: Untagged
@@ -498,7 +499,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 7411f467368c245ffa660b83e67ba9be, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -540,11 +541,40 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_LocalScale: {x: 9, y: 9, z: 9}
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1754560833
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1754560828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 873c6818116fa4c3b8266bfe3824db89, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GerstnerWaveController
+  waterMaterial: {fileID: 2100000, guid: 7411f467368c245ffa660b83e67ba9be, type: 2}
+  waterSurface: {fileID: 1754560832}
+  waveCount: 16
+  seed: 1234
+  amplitude: 0.15
+  amplitudeFalloff: 0.8
+  wavelength: 15.2
+  wavelengthFalloff: 0.8
+  windDirection: 26
+  directionSpread: 93
+  choppiness: 0.466
+  randomness: 0.4
+  speedMultiplier: 0.71
+  gravity: 9.81
+  timeScale: 1
+  syncSkyboxReflection: 1
+  skyboxOverride: {fileID: 2100000, guid: 09dc111fa814b4eb69c287ee114de5a6, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
