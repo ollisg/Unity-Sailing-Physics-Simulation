@@ -383,6 +383,52 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &780220567
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 780220569}
+  - component: {fileID: 780220568}
+  m_Layer: 0
+  m_Name: WeatherControl
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &780220568
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 780220567}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bd0bedd0484974c4a8c8c5c410f9b738, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeatherController
+  windSpeed: 6
+  windDirection: 34
+--- !u!4 &780220569
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 780220567}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2.21879, y: 0, z: -3.30644}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -619,51 +665,53 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GerstnerWaveController
   waterMaterial: {fileID: 2100000, guid: 7411f467368c245ffa660b83e67ba9be, type: 2}
   waterSurface: {fileID: 1754560832}
+  weather: {fileID: 780220568}
+  fallbackWindSpeed: 6
+  windDirection: 26
+  seaResponseTime: 60
+  decayTimeFactor: 2
+  shortWaveResponse: 0.1
+  swellResponse: 1.5
+  minWavelength: 0.25
+  maxWavelengthLimit: 200
+  wavelengthScale: 1
+  heightScale: 1
+  steepnessSteady: 0.04
+  steepnessGrowing: 0.05
+  steepnessDecaying: 0.03
+  steepnessGapRange: 3
   waveCount: 46
-  seed: 1252
-  waveHeight: 1.51
-  maxSteepness: 0.046
-  minWavelength: 0.5
-  maxWavelength: 83.2
+  seed: 1257
   wavelengthDistribution:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
       time: 0
       value: 0
-      inSlope: 6.5048842
-      outSlope: 6.5048842
+      inSlope: 1
+      outSlope: 1
       tangentMode: 0
       weightedMode: 0
-      inWeight: 0
-      outWeight: 0.05717255
+      inWeight: 0.33333334
+      outWeight: 0.33333334
     - serializedVersion: 3
       time: 1
-      value: 0
-      inSlope: -0.47927985
-      outSlope: -0.47927985
+      value: 1
+      inSlope: 1
+      outSlope: 1
       tangentMode: 0
       weightedMode: 0
-      inWeight: 0.09771317
-      outWeight: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  amplitudeSpectrum:
+  spectrumShape:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
       time: 0
-      value: 0.05
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 0.75
-      value: 0.6
+      value: 1
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -682,15 +730,18 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  windDirection: 26
   directionSpread: 93
   choppiness: 0.466
   randomness: 0.4
-  speedMultiplier: 0.71
+  speedMultiplier: 0.64
   gravity: 9.81
   timeScale: 1
   syncSkyboxReflection: 1
   skyboxOverride: {fileID: 2100000, guid: 09dc111fa814b4eb69c287ee114de5a6, type: 2}
+  liveSeaWindSpeed: 6
+  livePeakWavelength: 29.88
+  liveWaveHeight: 0.792
+  liveSteepness: 0.04
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -700,3 +751,4 @@ SceneRoots:
   - {fileID: 832575519}
   - {fileID: 1754560832}
   - {fileID: 1463122659}
+  - {fileID: 780220569}

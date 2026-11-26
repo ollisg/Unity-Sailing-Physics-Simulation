@@ -111,9 +111,9 @@ Material:
     - _EnvReflectionResolution: 128
     - _EnvironmentReflections: 1
     - _FoamNoiseScale: 5
-    - _FoamNoiseStrength: 0.75
-    - _FoamSoftness: 0.215
-    - _FoamThreshold: 0.192
+    - _FoamNoiseStrength: 0.514
+    - _FoamSoftness: 0.096
+    - _FoamThreshold: 0.182
     - _FresnelPower: 2.13
     - _GlossMapScale: 0
     - _Glossiness: 0
@@ -141,10 +141,10 @@ Material:
     - _TessMax: 64
     - _TessMaxDist: 44.79
     - _TessMinDist: 12.33
-    - _TotalAmplitude: 0.755
+    - _TotalAmplitude: 0.396
     - _UseSkyTex: 2
     - _WaveCount: 46
-    - _WaveTime: 3.0054438
+    - _WaveTime: 8.166111
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1

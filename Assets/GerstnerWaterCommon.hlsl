@@ -128,7 +128,9 @@ Varyings BuildWaterVertex(float3 flatPosWS)
 {
     float3 normal;
     float  crest;
-    float3 offset = GerstnerWaves(flatPosWS.xz, _WaveTime, normal, crest);
+    // Time is 0: the controller bakes the motion into each wave's phase (b.z), so waves can change
+    // wavelength and direction over time without jumping. _WaveTime only drives the foam/detail scrolling.
+    float3 offset = GerstnerWaves(flatPosWS.xz, 0.0, normal, crest);
     float3 posWS = flatPosWS + offset;
 
     Varyings OUT;
