@@ -5613,10 +5613,10 @@ MonoBehaviour:
   foamMapSize: 80
   foamLifetime: 3
   foamInjectRate: 6
-  foamInjectThreshold: 0.12
-  foamInjectSoftness: 0.15
-  foamDrift: 0.03
-  foamCamera: {fileID: 0}
+  foamInjectThreshold: 0.09
+  foamInjectSoftness: 0.309
+  foamDrift: 0
+  foamCamera: {fileID: 330585545}
   liveSeaWindSpeed: 6
   livePeakWavelength: 29.88
   liveWaveHeight: 0.792
