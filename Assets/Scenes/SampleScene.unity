@@ -600,7 +600,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 9, y: 9, z: 9}
+  m_LocalScale: {x: 5, y: 5, z: 5}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
@@ -620,9 +620,9 @@ MonoBehaviour:
   waterMaterial: {fileID: 2100000, guid: 7411f467368c245ffa660b83e67ba9be, type: 2}
   waterSurface: {fileID: 1754560832}
   waveCount: 46
-  seed: 1248
+  seed: 1252
   waveHeight: 1.51
-  maxSteepness: 0.059
+  maxSteepness: 0.046
   minWavelength: 0.5
   maxWavelength: 83.2
   wavelengthDistribution:

@@ -35,7 +35,8 @@ Shader "Custom/URP/GerstnerWater"
         [HideInInspector] _EnvReflectionResolution ("Env Reflection Resolution", Float) = 128
 
         [Header(Tessellation)]
-        _TessMax        ("Max Tessellation (near camera)", Range(1, 64)) = 16
+        _TessEdgeLength ("Target Edge Length Near Camera (m)", Range(0.01, 2)) = 0.05
+        _TessMax        ("Max Subdivisions Per Edge", Range(1, 64)) = 64
         _TessMinDist    ("Full Detail Until Distance", Float) = 20
         _TessMaxDist    ("No Tessellation Beyond Distance", Float) = 150
 
@@ -85,14 +86,22 @@ Shader "Custom/URP/GerstnerWater"
         return o;
     }
 
-    // Tessellation level for one edge, based on distance from the camera to the edge midpoint.
-    // Using the midpoint means two triangles sharing an edge always agree -> no cracks.
+    // Tessellation level for one edge: split it until the pieces reach a target length in
+    // world metres. Because the edge is measured in world space, scaling the water object (or
+    // changing the grid resolution) keeps the same detail per metre.
+    // Up close the target is _TessEdgeLength; past _TessMinDist it grows with distance, so
+    // triangles stay roughly the same size on screen. Fades out completely at _TessMaxDist.
+    // Only the shared edge's own endpoints are used, so neighbouring triangles always agree -> no cracks.
     float EdgeTessFactor(float3 p0, float3 p1)
     {
-        float3 mid  = 0.5 * (p0 + p1);
-        float  dist = distance(mid, _WorldSpaceCameraPos);
-        float  t    = saturate((dist - _TessMinDist) / max(_TessMaxDist - _TessMinDist, 1e-3));
-        return max(1.0, lerp(_TessMax, 1.0, t));
+        float3 mid    = 0.5 * (p0 + p1);
+        float  dist   = distance(mid, _WorldSpaceCameraPos);
+        float  target = _TessEdgeLength * max(1.0, dist / max(_TessMinDist, 1e-3));
+        float  f      = distance(p0, p1) / max(target, 1e-4);
+
+        float fade = saturate((dist - _TessMaxDist * 0.75) / max(_TessMaxDist * 0.25, 1e-3));
+        f = lerp(f, 1.0, fade);
+        return clamp(f, 1.0, _TessMax);
     }
 
     TessFactors PatchConstants(InputPatch<ControlPoint, 3> patch)

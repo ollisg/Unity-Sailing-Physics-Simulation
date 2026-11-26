@@ -41,10 +41,14 @@ public class WaterGridMesh : MonoBehaviour
     {
         if (follow == null) return;
 
-        float cell = size / resolution;
+        // Snap in whole (world-size) grid cells so vertices always land on the same world
+        // positions and the waves don't appear to slide. Accounts for the object's scale.
+        Vector3 scale = transform.lossyScale;
+        float cellX = size / resolution * Mathf.Abs(scale.x);
+        float cellZ = size / resolution * Mathf.Abs(scale.z);
         Vector3 p = transform.position;
-        p.x = Mathf.Round(follow.position.x / cell) * cell;
-        p.z = Mathf.Round(follow.position.z / cell) * cell;
+        if (cellX > 0f) p.x = Mathf.Round(follow.position.x / cellX) * cellX;
+        if (cellZ > 0f) p.z = Mathf.Round(follow.position.z / cellZ) * cellZ;
         transform.position = p;
     }
 
