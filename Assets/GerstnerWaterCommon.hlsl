@@ -14,6 +14,8 @@ CBUFFER_START(UnityPerMaterial)
     float  _FoamSoftness;
     float  _FoamNoiseScale;
     float  _FoamNoiseStrength;
+    float  _FoamTexScale;
+    float  _FoamTexMix;
     float  _Smoothness;
     float  _SpecularPower;
     float  _FresnelPower;
@@ -36,6 +38,7 @@ CBUFFER_START(UnityPerMaterial)
     float  _WaveCount;
     float  _TotalAmplitude;
     float  _WaveTime;
+    float  _CullMargin;
 CBUFFER_END
 
 // Skybox texture, synced from the skybox material by GerstnerWaveController.
@@ -45,6 +48,8 @@ TEXTURE2D(_SkyTex);
 SAMPLER(sampler_linear_repeat);
 TEXTURE2D(_NormalMap);
 SAMPLER(sampler_NormalMap);
+TEXTURE2D(_FoamTex);
+SAMPLER(sampler_FoamTex);
 TEXTURECUBE(_SkyCube);
 SAMPLER(sampler_SkyCube);
 float4 _SkyCube_HDR;
@@ -95,6 +100,10 @@ float3 GerstnerWaves(float2 p, float t, out float3 normal, out float crest)
         float  k   = a.w;
         float  Q   = b.x;
         float  w   = b.y;
+
+        // Waves that are completely faded out, or so small their slope is invisible, are skipped.
+        // The data is the same for every vertex, so this branch costs nothing.
+        if (amp * k < 5e-4) continue;
 
         float phase = k * dot(d, p) - w * t + b.z;
         float s, c;
@@ -239,7 +248,7 @@ float3 SkyReflection(float3 R, float perceptualRoughness)
 }
 
 // ------------------------------------------------------------------
-// Foam breakup noise (cheap value noise, no texture needed)
+// Foam breakup: smooth value noise plus a tileable foam texture
 // ------------------------------------------------------------------
 
 float Hash21(float2 p)
@@ -263,10 +272,20 @@ float ValueNoise(float2 p)
 
 float FoamNoise(float2 xz)
 {
+    // Smooth blobs: big, soft variation
     float2 p = xz * _FoamNoiseScale;
-    float n = ValueNoise(p + _WaveTime * 0.05) * 0.65
-            + ValueNoise(p * 2.7 - _WaveTime * 0.08) * 0.35;
-    return n; // 0..1
+    float soft = ValueNoise(p + _WaveTime * 0.05) * 0.65
+               + ValueNoise(p * 2.7 - _WaveTime * 0.08) * 0.35;
+
+    // Fine bubbly breakup from the foam texture. Two layers at different scales and drift,
+    // so the tiling never shows. Values are evenly spread 0..1, like the noise above.
+    float2 uv = xz * _FoamTexScale;
+    float f1 = SAMPLE_TEXTURE2D(_FoamTex, sampler_FoamTex, uv + _WaveTime * float2(0.011, 0.007)).r;
+    float f2 = SAMPLE_TEXTURE2D(_FoamTex, sampler_FoamTex, uv * 2.37 + float2(0.31, 0.77)
+                                - _WaveTime * float2(0.013, -0.009)).r;
+    float fine = f1 * 0.6 + f2 * 0.4;
+
+    return lerp(soft, fine, _FoamTexMix); // 0..1
 }
 
 // ------------------------------------------------------------------

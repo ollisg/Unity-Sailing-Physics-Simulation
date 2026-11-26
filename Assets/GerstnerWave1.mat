@@ -48,6 +48,10 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _FoamTex:
+        m_Texture: {fileID: 2800000, guid: 8cca5fac49695c43ad58cba66588432a, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _MainTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -103,6 +107,7 @@ Material:
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
     - _Cull: 2
+    - _CullMargin: 2.9374707
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
@@ -111,8 +116,10 @@ Material:
     - _EnvReflectionResolution: 128
     - _EnvironmentReflections: 1
     - _FoamNoiseScale: 5
-    - _FoamNoiseStrength: 0.514
+    - _FoamNoiseStrength: 0.356
     - _FoamSoftness: 0.096
+    - _FoamTexMix: 1
+    - _FoamTexScale: 0.5
     - _FoamThreshold: 0.182
     - _FresnelPower: 2.13
     - _GlossMapScale: 0
@@ -144,7 +151,7 @@ Material:
     - _TotalAmplitude: 0.396
     - _UseSkyTex: 2
     - _WaveCount: 46
-    - _WaveTime: 8.166111
+    - _WaveTime: 4.2697372
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1

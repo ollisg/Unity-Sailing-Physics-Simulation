@@ -33,16 +33,18 @@ public class GerstnerWaveController : MonoBehaviour
     [Range(0f, 360f)] public float windDirection = 0f;
 
     [Header("Sea State (how fast the sea follows the wind)")]
-    [Tooltip("Seconds the sea needs to catch up with a stronger wind (about 63% of the way). " +
-             "Also the base time for replacing waves after the wind direction changes (see below).")]
+    [Tooltip("Seconds the sea needs to catch up with a stronger or weaker wind speed (about 63% of the way).")]
     [Min(0.1f)] public float seaResponseTime = 30f;
     [Tooltip("The sea calms down slower than it builds up. 2 = twice as slow.")]
     [Min(1f)] public float decayTimeFactor = 2f;
 
     [Header("Wind Direction Changes (waves never rotate: they fade out and regrow on the new heading)")]
-    [Tooltip("How long the shortest chop waits after the wind turned before it starts fading out, as a fraction of Sea Response Time.")]
+    [Tooltip("Base time in seconds before waves that point the wrong way start fading out after the wind direction changed. " +
+             "Independent of Sea Response Time. Lower = the sea turns faster.")]
+    [Min(0.1f)] public float directionResponseTime = 20f;
+    [Tooltip("How long the shortest chop waits after the wind turned before it starts fading out, as a fraction of Direction Response Time.")]
     [Range(0.02f, 1f)] public float shortWaveResponse = 0.1f;
-    [Tooltip("How long the longest swell waits before fading out, as a multiple of Sea Response Time. " +
+    [Tooltip("How long the longest swell waits before fading out, as a multiple of Direction Response Time. " +
              "Old swell lingering while new chop grows is what makes the cross-sea.")]
     [Range(0.5f, 5f)] public float swellResponse = 1.5f;
     [Tooltip("A wave is replaced once its heading is more than this many degrees away from where it would be for the current wind.")]
@@ -103,11 +105,21 @@ public class GerstnerWaveController : MonoBehaviour
     [Min(0.1f)] public float gravity = 9.81f;
     [Range(0f, 5f)] public float timeScale = 1f;
 
+    [Header("Foam")]
+    [Tooltip("Tileable texture that breaks up the foam into fine bubbles. Leave empty to use the built-in one " +
+             "(Assets/Resources/GerstnerFoam). It is assigned to the water material for you.")]
+    public Texture foamTexture;
+
     [Header("Sky Reflection")]
     [Tooltip("Copy the panoramic texture, tint, exposure and rotation of the scene skybox (Lighting > Skybox Material) into the water material so it reflects the sky at full resolution.")]
     public bool syncSkyboxReflection = true;
     [Tooltip("Optional: use this skybox material instead of the one set in the Lighting window.")]
     public Material skyboxOverride;
+
+    [Header("Surface Sampling (floating objects, buoyancy)")]
+    [Tooltip("Waves shorter than this (metres) are ignored by GetHeight / GetNormal / GetVelocity. " +
+             "Fine ripples can't lift a boat, so this makes sampling cheaper without changing how the sea looks. 0 = use every wave.")]
+    [Min(0f)] public float samplingMinWavelength = 0.5f;
 
     [Header("Live Sea State (read-only, overwritten every frame)")]
     [SerializeField] float liveSeaWindSpeed;
@@ -122,6 +134,8 @@ public class GerstnerWaveController : MonoBehaviour
     static readonly int WaveCountId = Shader.PropertyToID("_WaveCount");
     static readonly int TotalAmpId = Shader.PropertyToID("_TotalAmplitude");
     static readonly int WaveTimeId = Shader.PropertyToID("_WaveTime");
+    static readonly int CullMarginId = Shader.PropertyToID("_CullMargin");
+    static readonly int FoamTexId = Shader.PropertyToID("_FoamTex");
 
     static readonly int SkyTexId = Shader.PropertyToID("_SkyTex");
     static readonly int SkyCubeId = Shader.PropertyToID("_SkyCube");
@@ -163,6 +177,9 @@ public class GerstnerWaveController : MonoBehaviour
     float _totalAmplitude = 1f;
     float _lastRealtime;
     float _simTime; // clock for the water's foam / detail-normal scrolling
+    Texture _defaultFoam;
+    bool _triedDefaultFoam;
+    Texture _lastFoam;
 
     int _cachedSeed;
     bool _randomsReady;
@@ -260,6 +277,26 @@ public class GerstnerWaveController : MonoBehaviour
         waterMaterial.SetFloat(EnvReflResId, RenderSettings.defaultReflectionResolution);
     }
 
+
+    /// <summary>Gives the water material its foam texture (the field above, or the built-in one).</summary>
+    void SyncFoam()
+    {
+        Texture tex = foamTexture;
+        if (tex == null)
+        {
+            if (!_triedDefaultFoam)
+            {
+                _defaultFoam = Resources.Load<Texture>("GerstnerFoam");
+                _triedDefaultFoam = true;
+            }
+            tex = _defaultFoam;
+        }
+        if (tex != null && tex != _lastFoam)
+        {
+            waterMaterial.SetTexture(FoamTexId, tex);
+            _lastFoam = tex;
+        }
+    }
 
     [ContextMenu("Randomize Seed")]
     public void RandomizeSeed()
@@ -421,7 +458,7 @@ public class GerstnerWaveController : MonoBehaviour
                     case Alive:
                         if (err > headingTolerance)
                         {
-                            float wait = seaResponseTime * Mathf.Lerp(shortWaveResponse, swellResponse, d)
+                            float wait = directionResponseTime * Mathf.Lerp(shortWaveResponse, swellResponse, d)
                                        * Mathf.Lerp(0.3f, 1.2f, (float)_turnRnd.NextDouble());
                             _timer[i] = wait;
                             _state[i] = Waiting;
@@ -510,6 +547,12 @@ public class GerstnerWaveController : MonoBehaviour
         // Used by the shader to colour troughs/crests: roughly +-1 at typical wave extremes
         _totalAmplitude = Mathf.Max(hs * 0.5f, 0.05f);
 
+        // How far any surface point can be pushed from its flat position (vertical + horizontal).
+        // The shader uses it to skip tessellating patches that are outside the camera view.
+        float sumAmp = 0f;
+        for (int i = 0; i < _count; i++) sumAmp += _waveA[i].z;
+        float cullMargin = sumAmp * (1f + q) + 0.5f;
+
         liveSeaWindSpeed = _seaSpeed;
         livePeakWavelength = peak;
         liveWaveHeight = hs;
@@ -524,6 +567,8 @@ public class GerstnerWaveController : MonoBehaviour
             waterMaterial.SetFloat(WaveCountId, _count);
             waterMaterial.SetFloat(TotalAmpId, _totalAmplitude);
             waterMaterial.SetFloat(WaveTimeId, _simTime); // wave motion itself is baked into the phases
+            waterMaterial.SetFloat(CullMarginId, cullMargin);
+            SyncFoam();
         }
     }
 
@@ -531,13 +576,17 @@ public class GerstnerWaveController : MonoBehaviour
     // CPU sampling (same math as the shader) - use it for buoyancy etc.
     // ------------------------------------------------------------------
 
+    float SamplingKMax => samplingMinWavelength > 0.01f ? 2f * Mathf.PI / samplingMinWavelength : float.MaxValue;
+
     /// <summary>Total displacement of the surface point whose undisplaced XZ position is p.</summary>
     public Vector3 GetDisplacement(Vector2 p)
     {
+        float kMax = SamplingKMax;
         Vector3 offset = Vector3.zero;
         for (int i = 0; i < _count; i++)
         {
             Vector4 a = _waveA[i];
+            if (a.w > kMax) continue;
             Vector4 b = _waveB[i];
             float phase = a.w * (a.x * p.x + a.y * p.y) + b.z;
             float s = Mathf.Sin(phase);
@@ -550,21 +599,86 @@ public class GerstnerWaveController : MonoBehaviour
         return offset;
     }
 
-    /// <summary>World-space water height at a world position.</summary>
-    public float GetHeight(Vector3 worldPos)
+    /// <summary>
+    /// Gerstner waves move points horizontally, so find the undisplaced position that ends up
+    /// at the given world XZ (a few fixed-point iterations are enough).
+    /// </summary>
+    Vector2 FindSourcePoint(Vector2 target)
     {
-        Vector2 target = new Vector2(worldPos.x, worldPos.z);
         Vector2 guess = target;
-
-        // Gerstner waves move points horizontally, so find the undisplaced
-        // position that ends up at 'target' (a few fixed-point iterations are enough).
         for (int i = 0; i < 4; i++)
         {
             Vector3 d = GetDisplacement(guess);
             guess = target - new Vector2(d.x, d.z);
         }
+        return guess;
+    }
 
-        float baseY = waterSurface != null ? waterSurface.position.y : transform.position.y;
-        return baseY + GetDisplacement(guess).y;
+    float BaseY => waterSurface != null ? waterSurface.position.y : transform.position.y;
+
+    /// <summary>World-space water height at a world position.</summary>
+    public float GetHeight(Vector3 worldPos)
+    {
+        Vector2 src = FindSourcePoint(new Vector2(worldPos.x, worldPos.z));
+        return BaseY + GetDisplacement(src).y;
+    }
+
+    /// <summary>
+    /// World-space water height and surface normal at a world position, in one lookup.
+    /// The normal uses the same formula as the shader.
+    /// </summary>
+    public float GetHeightAndNormal(Vector3 worldPos, out Vector3 normal)
+    {
+        Vector2 p = FindSourcePoint(new Vector2(worldPos.x, worldPos.z));
+        float kMax = SamplingKMax;
+
+        float height = 0f;
+        float nx = 0f, nz = 0f, ny = 0f;
+        for (int i = 0; i < _count; i++)
+        {
+            Vector4 a = _waveA[i];
+            if (a.w > kMax) continue;
+            Vector4 b = _waveB[i];
+            float phase = a.w * (a.x * p.x + a.y * p.y) + b.z;
+            float s = Mathf.Sin(phase);
+            float c = Mathf.Cos(phase);
+
+            float ka = a.w * a.z;
+            height += a.z * s;
+            nx += a.x * ka * c;
+            nz += a.y * ka * c;
+            ny += b.x * ka * s;
+        }
+
+        normal = new Vector3(-nx, 1f - ny, -nz).normalized;
+        return BaseY + height;
+    }
+
+    /// <summary>
+    /// Velocity (m/s) of the water at a world position. Gerstner water moves in circles,
+    /// so use it for drag: a floating object is carried along by it, not pushed through still water.
+    /// </summary>
+    public Vector3 GetVelocity(Vector3 worldPos)
+    {
+        Vector2 p = FindSourcePoint(new Vector2(worldPos.x, worldPos.z));
+        float kMax = SamplingKMax;
+
+        Vector3 v = Vector3.zero;
+        for (int i = 0; i < _count; i++)
+        {
+            Vector4 a = _waveA[i];
+            if (a.w > kMax) continue;
+            Vector4 b = _waveB[i];
+            float phase = a.w * (a.x * p.x + a.y * p.y) + b.z;
+            float s = Mathf.Sin(phase);
+            float c = Mathf.Cos(phase);
+
+            // d(phase)/dt = -omega * timeScale
+            float w = b.y * timeScale;
+            v.x += b.x * a.z * a.x * s * w;
+            v.z += b.x * a.z * a.y * s * w;
+            v.y += -a.z * c * w;
+        }
+        return v;
     }
 }

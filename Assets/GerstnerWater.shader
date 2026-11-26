@@ -9,8 +9,12 @@ Shader "Custom/URP/GerstnerWater"
         _FoamColor      ("Foam Color", Color) = (1, 1, 1, 1)
         _FoamThreshold  ("Foam Threshold (crest sharpness)", Range(0, 1)) = 0.2
         _FoamSoftness   ("Foam Softness", Range(0.01, 1)) = 0.25
-        _FoamNoiseScale ("Foam Noise Scale (1/m)", Range(0.01, 5)) = 0.6
+        [PowerSlider(3)] _FoamNoiseScale ("Foam Noise Scale (1/m)", Range(0.01, 40)) = 0.6
         _FoamNoiseStrength ("Foam Noise Strength", Range(0, 1)) = 0.2
+        // Fine breakup from a tileable texture. The wave controller assigns it (Foam Texture field).
+        [NoScaleOffset] _FoamTex ("Foam Texture (fine breakup)", 2D) = "gray" {}
+        [PowerSlider(3)] _FoamTexScale ("Foam Texture Scale (1/m)", Range(0.05, 40)) = 3
+        _FoamTexMix     ("Foam Texture Mix (0 smooth noise, 1 texture)", Range(0, 1)) = 0.8
 
         [Header(Surface)]
         _Smoothness     ("Smoothness", Range(0, 1)) = 0.95
@@ -44,6 +48,7 @@ Shader "Custom/URP/GerstnerWater"
         [HideInInspector] _WaveCount      ("Wave Count", Float) = 1
         [HideInInspector] _TotalAmplitude ("Total Amplitude", Float) = 1
         [HideInInspector] _WaveTime       ("Wave Time", Float) = 0
+        [HideInInspector] _CullMargin     ("Cull Margin", Float) = 5
     }
 
 
@@ -104,9 +109,45 @@ Shader "Custom/URP/GerstnerWater"
         return clamp(f, 1.0, _TessMax);
     }
 
+    // True when a sphere lies completely outside one of the camera's four side planes
+    // (left, right, bottom, top), taken from the view-projection matrix.
+    bool SphereOutsideFrustum(float3 center, float radius)
+    {
+        float4 m0 = UNITY_MATRIX_VP[0];
+        float4 m1 = UNITY_MATRIX_VP[1];
+        float4 m3 = UNITY_MATRIX_VP[3];
+        float4 planes[4];
+        planes[0] = m3 + m0;
+        planes[1] = m3 - m0;
+        planes[2] = m3 + m1;
+        planes[3] = m3 - m1;
+
+        [unroll]
+        for (int i = 0; i < 4; i++)
+        {
+            float len = length(planes[i].xyz);
+            if (dot(planes[i].xyz, center) + planes[i].w < -radius * len)
+                return true;
+        }
+        return false;
+    }
+
     TessFactors PatchConstants(InputPatch<ControlPoint, 3> patch)
     {
         TessFactors f;
+
+        // Frustum culling: patches that can't be seen (behind or beside the camera) get a
+        // tessellation factor of 0 and are dropped before any of their vertices are computed.
+        // _CullMargin = largest distance the waves can move a point, so nothing visible is lost.
+        float3 c = (patch[0].positionWS + patch[1].positionWS + patch[2].positionWS) / 3.0;
+        float  r = max(distance(c, patch[0].positionWS),
+                   max(distance(c, patch[1].positionWS), distance(c, patch[2].positionWS)));
+        if (SphereOutsideFrustum(c, r + _CullMargin))
+        {
+            f.edge[0] = 0; f.edge[1] = 0; f.edge[2] = 0; f.inside = 0;
+            return f;
+        }
+
         f.edge[0] = EdgeTessFactor(patch[1].positionWS, patch[2].positionWS);
         f.edge[1] = EdgeTessFactor(patch[2].positionWS, patch[0].positionWS);
         f.edge[2] = EdgeTessFactor(patch[0].positionWS, patch[1].positionWS);
