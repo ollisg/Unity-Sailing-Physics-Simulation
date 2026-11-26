@@ -535,8 +535,8 @@ MonoBehaviour:
   fullOpacityWind: 8
   volume: {x: 60, y: 10, z: 60}
   centreHeight: 2
-  windSmoothing: 1.5
-  turbulence: 1
+  windSmoothing: 1.94
+  turbulence: 0.4
 --- !u!199 &960052673
 ParticleSystemRenderer:
   serializedVersion: 7
@@ -5596,9 +5596,9 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   spreadCalm: 110
-  spreadStrong: 25
+  spreadStrong: 30.5
   spreadCalmWind: 2
-  spreadStrongWind: 18
+  spreadStrongWind: 25
   choppiness: 1
   randomness: 0.497
   speedMultiplier: 0.65
@@ -5608,11 +5608,20 @@ MonoBehaviour:
   syncSkyboxReflection: 1
   skyboxOverride: {fileID: 2100000, guid: 09dc111fa814b4eb69c287ee114de5a6, type: 2}
   samplingMinWavelength: 0.5
+  persistentFoam: 1
+  foamMapResolution: 512
+  foamMapSize: 80
+  foamLifetime: 3
+  foamInjectRate: 6
+  foamInjectThreshold: 0.12
+  foamInjectSoftness: 0.15
+  foamDrift: 0.03
+  foamCamera: {fileID: 0}
   liveSeaWindSpeed: 6
   livePeakWavelength: 29.88
   liveWaveHeight: 0.792
   liveSteepness: 0.04
-  liveSpread: 96.71875
+  liveSpread: 103.62275
   liveTurningWaves: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

@@ -15,6 +15,8 @@ Shader "Custom/URP/GerstnerWater"
         [NoScaleOffset] _FoamTex ("Foam Texture (fine breakup)", 2D) = "gray" {}
         [PowerSlider(3)] _FoamTexScale ("Foam Texture Scale (1/m)", Range(0.05, 40)) = 3
         _FoamTexMix     ("Foam Texture Mix (0 smooth noise, 1 texture)", Range(0, 1)) = 0.8
+        // Foam that lingers behind crests (Play mode, from the controller's foam map). 0 = off.
+        _FoamTrailAmount ("Persistent Foam Amount", Range(0, 1)) = 1
 
         [Header(Surface)]
         _Smoothness     ("Smoothness", Range(0, 1)) = 0.95
@@ -49,6 +51,8 @@ Shader "Custom/URP/GerstnerWater"
         [HideInInspector] _TotalAmplitude ("Total Amplitude", Float) = 1
         [HideInInspector] _WaveTime       ("Wave Time", Float) = 0
         [HideInInspector] _CullMargin     ("Cull Margin", Float) = 5
+        [HideInInspector] [NoScaleOffset] _FoamMap ("Foam Map", 2D) = "black" {}
+        [HideInInspector] _FoamMapParams  ("Foam Map Params", Vector) = (0, 0, 0, 0)
     }
 
 

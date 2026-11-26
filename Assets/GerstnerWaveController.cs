@@ -121,6 +121,26 @@ public class GerstnerWaveController : MonoBehaviour
              "Fine ripples can't lift a boat, so this makes sampling cheaper without changing how the sea looks. 0 = use every wave.")]
     [Min(0f)] public float samplingMinWavelength = 0.5f;
 
+    [Header("Persistent Foam (Play mode only)")]
+    [Tooltip("Foam that lingers behind the crests and slowly dissolves. Uses a foam map that follows the camera.")]
+    public bool persistentFoam = true;
+    [Tooltip("Foam map texels per side. 512 is plenty; 256 is cheaper and coarser.")]
+    [Range(128, 1024)] public int foamMapResolution = 512;
+    [Tooltip("Metres covered by the foam map, centred on the camera. Bigger = more distance with trails but coarser foam.")]
+    [Min(10f)] public float foamMapSize = 80f;
+    [Tooltip("Seconds until foam has faded to about a third of its strength.")]
+    [Min(0.1f)] public float foamLifetime = 3f;
+    [Tooltip("How quickly breaking crests lay down foam. Higher = denser, whiter trails.")]
+    [Min(0.1f)] public float foamInjectRate = 6f;
+    [Tooltip("Crest sharpness needed to make foam (same scale as the material's Foam Threshold).")]
+    [Range(0f, 1f)] public float foamInjectThreshold = 0.12f;
+    [Tooltip("Softness of the foam threshold above.")]
+    [Range(0.01f, 1f)] public float foamInjectSoftness = 0.15f;
+    [Tooltip("Foam slides along with the wind: this fraction of the wind speed (0 = foam stays where it formed).")]
+    [Range(0f, 0.2f)] public float foamDrift = 0.03f;
+    [Tooltip("Optional. The foam map is centred on this camera. Empty = Camera.main.")]
+    public Camera foamCamera;
+
     [Header("Live Sea State (read-only, overwritten every frame)")]
     [SerializeField] float liveSeaWindSpeed;
     [SerializeField] float livePeakWavelength;
@@ -136,6 +156,18 @@ public class GerstnerWaveController : MonoBehaviour
     static readonly int WaveTimeId = Shader.PropertyToID("_WaveTime");
     static readonly int CullMarginId = Shader.PropertyToID("_CullMargin");
     static readonly int FoamTexId = Shader.PropertyToID("_FoamTex");
+
+    static readonly int FoamMapId = Shader.PropertyToID("_FoamMap");
+    static readonly int FoamMapParamsId = Shader.PropertyToID("_FoamMapParams");
+    static readonly int FmOriginId = Shader.PropertyToID("_MapOrigin");
+    static readonly int FmSizeId = Shader.PropertyToID("_MapSize");
+    static readonly int FmResId = Shader.PropertyToID("_MapRes");
+    static readonly int FmShiftId = Shader.PropertyToID("_Shift");
+    static readonly int FmDecayId = Shader.PropertyToID("_Decay");
+    static readonly int FmInjectId = Shader.PropertyToID("_Inject");
+    static readonly int FmThresholdId = Shader.PropertyToID("_Threshold");
+    static readonly int FmSoftnessId = Shader.PropertyToID("_Softness");
+    static readonly int FmKCutId = Shader.PropertyToID("_KCut");
 
     static readonly int SkyTexId = Shader.PropertyToID("_SkyTex");
     static readonly int SkyCubeId = Shader.PropertyToID("_SkyCube");
@@ -180,6 +212,15 @@ public class GerstnerWaveController : MonoBehaviour
     Texture _defaultFoam;
     bool _triedDefaultFoam;
     Texture _lastFoam;
+
+    // Persistent foam map state
+    RenderTexture _foamA, _foamB; // _foamA = latest
+    Material _foamMat;
+    int _foamRes;
+    int _originX, _originZ;       // map corner in whole texels (world = index * texel size)
+    bool _foamValid;
+    Vector2 _driftAcc;            // wind drift not yet applied (in texels)
+    float _foamSize;
 
     int _cachedSeed;
     bool _randomsReady;
@@ -234,6 +275,13 @@ public class GerstnerWaveController : MonoBehaviour
 
         if (waterMaterial != null)
             SyncSkybox();
+
+        UpdateFoamMap(dt * timeScale);
+    }
+
+    void OnDisable()
+    {
+        DisableFoamMap();
     }
 
     /// <summary>
@@ -570,6 +618,130 @@ public class GerstnerWaveController : MonoBehaviour
             waterMaterial.SetFloat(CullMarginId, cullMargin);
             SyncFoam();
         }
+    }
+
+
+    // ------------------------------------------------------------------
+    // Persistent foam map
+    // ------------------------------------------------------------------
+
+    void DisableFoamMap()
+    {
+        if (waterMaterial != null)
+            waterMaterial.SetVector(FoamMapParamsId, Vector4.zero);
+        ReleaseFoamTextures();
+        if (_foamMat != null)
+        {
+            if (Application.isPlaying) Destroy(_foamMat); else DestroyImmediate(_foamMat);
+            _foamMat = null;
+        }
+    }
+
+    void ReleaseFoamTextures()
+    {
+        if (_foamA != null) { _foamA.Release(); if (Application.isPlaying) Destroy(_foamA); else DestroyImmediate(_foamA); _foamA = null; }
+        if (_foamB != null) { _foamB.Release(); if (Application.isPlaying) Destroy(_foamB); else DestroyImmediate(_foamB); _foamB = null; }
+        _foamValid = false;
+    }
+
+    RenderTexture MakeFoamRT(int res)
+    {
+        RenderTextureFormat fmt = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RHalf)
+            ? RenderTextureFormat.RHalf : RenderTextureFormat.R8;
+        var rt = new RenderTexture(res, res, 0, fmt, RenderTextureReadWrite.Linear)
+        {
+            name = "GerstnerFoamMap",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        rt.Create();
+        var prev = RenderTexture.active;
+        RenderTexture.active = rt;
+        GL.Clear(false, true, Color.black);
+        RenderTexture.active = prev;
+        return rt;
+    }
+
+    void UpdateFoamMap(float simDt)
+    {
+        if (waterMaterial == null) return;
+
+        // Edit mode (nothing moves) or switched off: no foam map, the water shows crest foam only.
+        if (!Application.isPlaying || !persistentFoam)
+        {
+            if (_foamA != null || _foamMat != null) DisableFoamMap();
+            else waterMaterial.SetVector(FoamMapParamsId, Vector4.zero);
+            return;
+        }
+
+        if (_foamMat == null)
+        {
+            Shader sh = Shader.Find("Hidden/GerstnerFoamUpdate");
+            if (sh == null) sh = Resources.Load<Shader>("GerstnerFoamUpdate");
+            if (sh == null) return; // shader missing: stay without trails
+            _foamMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
+        }
+
+        int res = Mathf.Clamp(foamMapResolution, 64, 2048);
+        float size = Mathf.Max(foamMapSize, 5f);
+        if (_foamA == null || _foamRes != res || !Mathf.Approximately(_foamSize, size))
+        {
+            ReleaseFoamTextures();
+            _foamA = MakeFoamRT(res);
+            _foamB = MakeFoamRT(res);
+            _foamRes = res;
+            _foamSize = size;
+            _driftAcc = Vector2.zero;
+        }
+
+        float texel = size / res;
+
+        // Map follows the camera in whole texels, so the foam never swims.
+        Camera cam = foamCamera != null ? foamCamera : Camera.main;
+        Vector3 centre = cam != null ? cam.transform.position : transform.position;
+        int newX = Mathf.FloorToInt((centre.x - size * 0.5f) / texel);
+        int newZ = Mathf.FloorToInt((centre.z - size * 0.5f) / texel);
+        if (!_foamValid) { _originX = newX; _originZ = newZ; }
+
+        // Wind drift, applied in whole texels as well (no blurring from resampling).
+        Vector2Int drift = Vector2Int.zero;
+        if (simDt > 0f)
+        {
+            float rad = TargetWindDirection * Mathf.Deg2Rad;
+            Vector2 v = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * (_seaSpeed * foamDrift);
+            _driftAcc += v * (simDt / texel);
+            drift = new Vector2Int((int)_driftAcc.x, (int)_driftAcc.y);
+            _driftAcc -= drift;
+        }
+
+        float kcut = 2f * Mathf.PI / (3f * texel); // finest wave the map can show is ~3 texels long
+        float lifetime = Mathf.Max(foamLifetime, 0.05f);
+
+        _foamMat.SetVectorArray(WaveAId, _waveA);
+        _foamMat.SetVectorArray(WaveBId, _waveB);
+        _foamMat.SetFloat(WaveCountId, _count);
+        _foamMat.SetVector(FmOriginId, new Vector4(newX * texel, newZ * texel, 0, 0));
+        _foamMat.SetFloat(FmSizeId, size);
+        _foamMat.SetFloat(FmResId, res);
+        _foamMat.SetVector(FmShiftId, new Vector4(newX - _originX - drift.x, newZ - _originZ - drift.y, 0, 0));
+        _foamMat.SetFloat(FmDecayId, Mathf.Exp(-simDt / lifetime));
+        _foamMat.SetFloat(FmInjectId, foamInjectRate * simDt);
+        _foamMat.SetFloat(FmThresholdId, foamInjectThreshold);
+        _foamMat.SetFloat(FmSoftnessId, foamInjectSoftness);
+        _foamMat.SetFloat(FmKCutId, kcut);
+
+        Graphics.Blit(_foamA, _foamB, _foamMat);
+        (_foamA, _foamB) = (_foamB, _foamA);
+
+        _originX = newX;
+        _originZ = newZ;
+        _foamValid = true;
+
+        waterMaterial.SetTexture(FoamMapId, _foamA);
+        // The leftover (sub-texel) part of the drift is applied here as a smooth offset, so the foam
+        // slides continuously instead of hopping one texel at a time.
+        waterMaterial.SetVector(FoamMapParamsId, new Vector4((newX + _driftAcc.x) * texel, (newZ + _driftAcc.y) * texel, 1f / size, 1f));
     }
 
     // ------------------------------------------------------------------

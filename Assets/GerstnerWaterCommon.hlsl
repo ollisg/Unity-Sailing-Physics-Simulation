@@ -16,6 +16,8 @@ CBUFFER_START(UnityPerMaterial)
     float  _FoamNoiseStrength;
     float  _FoamTexScale;
     float  _FoamTexMix;
+    float4 _FoamMapParams; // xy = map origin (world XZ), z = 1 / map size, w = 1 when the map is valid
+    float  _FoamTrailAmount;
     float  _Smoothness;
     float  _SpecularPower;
     float  _FresnelPower;
@@ -50,6 +52,8 @@ TEXTURE2D(_NormalMap);
 SAMPLER(sampler_NormalMap);
 TEXTURE2D(_FoamTex);
 SAMPLER(sampler_FoamTex);
+TEXTURE2D(_FoamMap);
+SAMPLER(sampler_FoamMap);
 TEXTURECUBE(_SkyCube);
 SAMPLER(sampler_SkyCube);
 float4 _SkyCube_HDR;
@@ -69,6 +73,7 @@ struct Varyings
     float3 normalWS   : TEXCOORD1;
     float  height     : TEXCOORD2; // -1..1, relative to total amplitude
     float  crest      : TEXCOORD3; // local surface compression (0 = flat, ~1 = sharpest possible crest)
+    float2 flatXZ     : TEXCOORD4; // undisplaced position, the foam map is keyed to it
 };
 
 // Sums all Gerstner waves at world XZ position p.
@@ -148,6 +153,7 @@ Varyings BuildWaterVertex(float3 flatPosWS)
     OUT.normalWS   = normal;
     OUT.height     = offset.y / max(_TotalAmplitude, 1e-4);
     OUT.crest      = crest;
+    OUT.flatXZ     = flatPosWS.xz;
     return OUT;
 }
 
@@ -339,8 +345,18 @@ half4 ShadeWater(Varyings IN)
     col += mainLight.color * pow(saturate(dot(N, H)), _SpecularPower) * _Smoothness;
 
     // Crest foam: local surface compression, broken up with noise
-    float noise = (FoamNoise(IN.positionWS.xz) - 0.5) * _FoamNoiseStrength;
-    float foam  = smoothstep(_FoamThreshold, _FoamThreshold + _FoamSoftness, IN.crest + noise);
+    float fn   = FoamNoise(IN.positionWS.xz);
+    float foam = smoothstep(_FoamThreshold, _FoamThreshold + _FoamSoftness, IN.crest + (fn - 0.5) * _FoamNoiseStrength);
+
+    // Persistent foam: what the foam map remembers from earlier crests. As it fades it breaks up
+    // into patches (the noise threshold rises through it) instead of just getting more transparent.
+    if (_FoamMapParams.w > 0.5)
+    {
+        float2 fuv = (IN.flatXZ - _FoamMapParams.xy) * _FoamMapParams.z;
+        float trail = SAMPLE_TEXTURE2D(_FoamMap, sampler_FoamMap, fuv).r * _FoamTrailAmount;
+        float edge = saturate(min(min(fuv.x, 1.0 - fuv.x), min(fuv.y, 1.0 - fuv.y)) * 8.0); // fade out at the map border
+        foam = max(foam, smoothstep(fn, fn + 0.15, trail * 1.15) * edge);
+    }
     float3 foamLit = _FoamColor.rgb * (mainLight.color * (ndl * 0.6 + 0.4) + SampleSH(float3(0, 1, 0)));
     col = lerp(col, foamLit, foam * _FoamColor.a);
 
