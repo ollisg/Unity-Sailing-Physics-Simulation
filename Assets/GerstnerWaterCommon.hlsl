@@ -33,10 +33,8 @@ CBUFFER_START(UnityPerMaterial)
     float  _SkyRotation;
     float  _UseSkyTex;
     float  _EnvReflectionResolution;
-    float  _TessEdgeLength;
+    float  _TessPixels;
     float  _TessMax;
-    float  _TessMinDist;
-    float  _TessMaxDist;
     float  _WaveCount;
     float  _TotalAmplitude;
     float  _WaveTime;

@@ -41,10 +41,8 @@ Shader "Custom/URP/GerstnerWater"
         [HideInInspector] _EnvReflectionResolution ("Env Reflection Resolution", Float) = 128
 
         [Header(Tessellation)]
-        _TessEdgeLength ("Target Edge Length Near Camera (m)", Range(0.01, 2)) = 0.05
+        _TessPixels     ("Target Triangle Edge (pixels)", Range(2, 64)) = 8
         _TessMax        ("Max Subdivisions Per Edge", Range(1, 64)) = 64
-        _TessMinDist    ("Full Detail Until Distance", Float) = 20
-        _TessMaxDist    ("No Tessellation Beyond Distance", Float) = 150
 
         // Driven by GerstnerWaveController
         [HideInInspector] _WaveCount      ("Wave Count", Float) = 1
@@ -95,21 +93,25 @@ Shader "Custom/URP/GerstnerWater"
         return o;
     }
 
-    // Tessellation level for one edge: split it until the pieces reach a target length in
-    // world metres. Because the edge is measured in world space, scaling the water object (or
-    // changing the grid resolution) keeps the same detail per metre.
-    // Up close the target is _TessEdgeLength; past _TessMinDist it grows with distance, so
-    // triangles stay roughly the same size on screen. Fades out completely at _TessMaxDist.
+    // Tessellation level for one edge: split it until each piece is about _TessPixels long
+    // on screen. The edge's on-screen size comes from its world length, its distance to the
+    // camera, the field of view and the screen height, so detail falls off smoothly with
+    // distance and follows zoom and resolution automatically. Far away the factor reaches 1
+    // (no extra triangles) on its own, so there is no distance cut-off and no visible ring.
+    // The distance is measured to the edge's midpoint rather than along the view direction,
+    // so turning the camera doesn't change the detail (no shimmering while looking around).
     // Only the shared edge's own endpoints are used, so neighbouring triangles always agree -> no cracks.
     float EdgeTessFactor(float3 p0, float3 p1)
     {
-        float3 mid    = 0.5 * (p0 + p1);
-        float  dist   = distance(mid, _WorldSpaceCameraPos);
-        float  target = _TessEdgeLength * max(1.0, dist / max(_TessMinDist, 1e-3));
-        float  f      = distance(p0, p1) / max(target, 1e-4);
+        float3 mid  = 0.5 * (p0 + p1);
+        float  dist = max(distance(mid, _WorldSpaceCameraPos), _ProjectionParams.y);
 
-        float fade = saturate((dist - _TessMaxDist * 0.75) / max(_TessMaxDist * 0.25, 1e-3));
-        f = lerp(f, 1.0, fade);
+        // pixels per metre: (screen height / 2) * cot(fov / 2) / distance;
+        // an orthographic camera has the same scale at every distance
+        float  halfScreenScale = 0.5 * _ScreenParams.y * abs(UNITY_MATRIX_P[1][1]);
+        float  pxPerMetre = unity_OrthoParams.w > 0.5 ? halfScreenScale : halfScreenScale / dist;
+
+        float  f = distance(p0, p1) * pxPerMetre / max(_TessPixels, 0.5);
         return clamp(f, 1.0, _TessMax);
     }
 

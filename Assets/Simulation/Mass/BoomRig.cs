@@ -69,6 +69,8 @@ public class BoomRig : MassSource
     [SerializeField] float windTorque;
 
     public float Angle => _theta;                 // rad
+    /// <summary>Boom rotation about the mast axis in degrees, as applied to the pivot.</summary>
+    public float SignedAngleDeg => _sign * _theta * Mathf.Rad2Deg;
     public float AngularVelocity => _omega;       // rad/s
     public float InertiaAboutMast => _iAxis;      // kg·m²
     public Transform Pivot => _pivot;
@@ -152,9 +154,14 @@ public class BoomRig : MassSource
         float dB = Vector3.Cross(endB - mastPoint, axis).sqrMagnitude;
         Vector3 near = dA < dB ? endA : endB, far = dA < dB ? endB : endA;
 
-        Vector3 pivotPos = gooseneck != null
-            ? gooseneck.position
-            : mastPoint + axis * Vector3.Dot(near - mastPoint, axis); // gooseneck on the mast axis
+        Vector3 pivotPos = gooseneck != null ? gooseneck.position : near;
+
+        // The sail turns around its luff: the line from the gooseneck to the head of the sail.
+        // (The ILCA mast is raked and bent, so a straight line through the mast mesh would miss
+        // the masthead and the head of the sail would swing away from it.)
+        if (SailHead(root.up, out Vector3 head) && (head - pivotPos).sqrMagnitude > 0.25f)
+            axis = (head - pivotPos).normalized;
+        if (Vector3.Dot(axis, root.up) < 0f) axis = -axis;
 
         Vector3 boomDir = Vector3.ProjectOnPlane(far - pivotPos, axis).normalized;
         if (boomDir.sqrMagnitude < 1e-6f) boomDir = Vector3.ProjectOnPlane(-root.forward, axis).normalized;
@@ -165,7 +172,19 @@ public class BoomRig : MassSource
         _baseLocalRot = _pivot.localRotation;
 
         boom.SetParent(_pivot, true);
-        if (sail != null) sail.SetParent(_pivot, true);
+        // A Cloth sail (SkinnedMeshRenderer) is skinned to the boom like a cape to a character,
+        // so its luff stays on the mast. A plain mesh sail just turns with the boom.
+        if (sail != null)
+        {
+            bool skinned = false;
+            if (sail.GetComponent<SkinnedMeshRenderer>() != null)
+            {
+                var skin = sail.GetComponent<SailClothSkinning>();
+                if (skin == null) skin = sail.gameObject.AddComponent<SailClothSkinning>();
+                skinned = skin.Setup(root, _pivot);
+            }
+            if (!skinned) sail.SetParent(_pivot, true);
+        }
 
         // positive θ = boom tip towards the boat's +X
         Vector3 turned = Quaternion.AngleAxis(1f, axis) * boomDir;
@@ -180,14 +199,39 @@ public class BoomRig : MassSource
         _ready = true;
     }
 
+    // The sail's mesh from a MeshFilter, or from a SkinnedMeshRenderer (needed by the Cloth component).
+    static Mesh SharedMesh(Transform t)
+    {
+        if (t == null) return null;
+        var mf = t.GetComponent<MeshFilter>();
+        if (mf != null && mf.sharedMesh != null) return mf.sharedMesh;
+        var smr = t.GetComponent<SkinnedMeshRenderer>();
+        return smr != null ? smr.sharedMesh : null;
+    }
+
+    // Highest point of the sail mesh (the head), in world space.
+    bool SailHead(Vector3 up, out Vector3 head)
+    {
+        head = Vector3.zero;
+        var mesh = SharedMesh(sail);
+        if (mesh == null || !(mesh.isReadable || Application.isEditor)) return false;
+        float best = float.MinValue;
+        foreach (var v in mesh.vertices)
+        {
+            Vector3 w = sail.TransformPoint(v);
+            float h = Vector3.Dot(w, up);
+            if (h > best) { best = h; head = w; }
+        }
+        return best > float.MinValue;
+    }
+
     void SailGeometry()
     {
         _sailCom = _boomCom + Vector3.up * 2.5f;
         _sailHeight = 5f; _sailFoot = _boomLength;
         if (sail == null) return;
 
-        var mf = sail.GetComponent<MeshFilter>();
-        var mesh = mf != null ? mf.sharedMesh : null;
+        var mesh = SharedMesh(sail);
         if (mesh == null) return;
 
         if (mesh.isReadable || Application.isEditor)
