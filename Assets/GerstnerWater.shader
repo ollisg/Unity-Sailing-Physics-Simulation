@@ -24,6 +24,9 @@ Shader "Custom/URP/GerstnerWater"
         _FresnelPower   ("Fresnel Power", Range(0.5, 8)) = 5
         _ReflectionStrength ("Reflection Strength", Range(0, 2)) = 1
         _ReflectionAmount ("Reflection Amount (0 physical, 1 stylized)", Range(0, 1)) = 0.85
+        _MaxReflection ("Max Reflection (lower = more water colour shows)", Range(0, 1)) = 0.75
+        _CloudReflection ("Cloud Reflection", Range(0, 1)) = 0.6
+        _CloudShadowDarkening ("Cloud Shadow Darkening", Range(0, 1)) = 0.6
 
         [Header(Detail Normals)]
         [Normal][NoScaleOffset] _NormalMap ("Normal Map", 2D) = "bump" {}

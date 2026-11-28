@@ -3,6 +3,7 @@
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+#include "Assets/Graphics/Sky/SailingClouds.hlsl"
 
 #define MAX_WAVES 128
 
@@ -23,6 +24,9 @@ CBUFFER_START(UnityPerMaterial)
     float  _FresnelPower;
     float  _ReflectionStrength;
     float  _ReflectionAmount;
+    float  _MaxReflection;
+    float  _CloudReflection;
+    float  _CloudShadowDarkening;
     float  _NormalStrength;
     float  _NormalTiling;
     float  _NormalSpeed;
@@ -209,7 +213,7 @@ float MipToPerceptualRoughness(float mip)
     return saturate((1.7 - sqrt(max(2.89 - 2.8 * m / 6.0, 0.0))) / 1.4);
 }
 
-float3 SkyReflection(float3 R, float perceptualRoughness)
+float3 SkyReflectionBase(float3 R, float perceptualRoughness)
 {
     // Keep the reflection above the horizon: on a wavy surface reflect() can point
     // slightly downward, which would pick up the (dark) lower half of the sky.
@@ -249,6 +253,17 @@ float3 SkyReflection(float3 R, float perceptualRoughness)
 
     float3 sharp = SampleSkyTexture(R);
     return lerp(sharp, cubeRefl, toCube);
+}
+
+// Sky reflection with the cloud layer on top (same clouds as the skybox).
+float3 SkyReflection(float3 R, float perceptualRoughness, float3 positionWS)
+{
+    float3 sky = StormSky(SkyReflectionBase(R, perceptualRoughness));
+    R.y = max(R.y, 0.01);
+    R = normalize(R);
+    float footprint = max(length(ddx(R)), length(ddy(R))) + 1e-6;
+    float3 clouded = CloudLayer(positionWS, R, footprint + perceptualRoughness * 0.2, sky);
+    return lerp(sky, clouded, _CloudReflection);
 }
 
 // ------------------------------------------------------------------
@@ -322,6 +337,7 @@ half4 ShadeWater(Varyings IN)
     float3 V = GetWorldSpaceNormalizeViewDir(IN.positionWS);
 
     Light mainLight = GetMainLight();
+    mainLight.color *= CloudSunFactor(IN.positionWS); // moving cloud shadows
     float ndl = saturate(dot(N, mainLight.direction));
 
     // Base (body) color: deep in troughs, shallow on crests
@@ -335,8 +351,12 @@ half4 ShadeWater(Varyings IN)
     float  nv   = saturate(dot(N, V));
     float  fres = 0.02 + 0.98 * pow(1.0 - nv, _FresnelPower);
     fres = saturate(lerp(fres, 1.0, _ReflectionAmount) * _ReflectionStrength);
-    float3 refl = SkyReflection(reflect(-V, N), 1.0 - _Smoothness);
+    fres = min(fres, _MaxReflection); // always let some of the water's own colour through
+    float3 refl = SkyReflection(reflect(-V, N), 1.0 - _Smoothness, IN.positionWS);
     float3 col  = lerp(diffuse, refl, fres);
+
+    // cloud shadows: the reflection dominates the look, so darken the whole surface a bit too
+    col *= lerp(1.0, CloudShadow(IN.positionWS), _CloudShadowDarkening);
 
     // Sun specular
     float3 H = normalize(mainLight.direction + V);

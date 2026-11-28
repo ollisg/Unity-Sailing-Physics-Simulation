@@ -110,6 +110,8 @@ Material:
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
+    - _CloudReflection: 0.176
+    - _CloudShadowDarkening: 0.769
     - _Cull: 2
     - _CullMargin: 3.0066743
     - _Cutoff: 0.5
@@ -130,16 +132,17 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
+    - _MaxReflection: 0.856
     - _Metallic: 0
     - _NormalSpeed: 0
     - _NormalStrength: 0.18
-    - _NormalTiling: 1.818
+    - _NormalTiling: 1.84
     - _OcclusionStrength: 1
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1
-    - _ReflectionAmount: 0.85
-    - _ReflectionStrength: 2
+    - _ReflectionAmount: 0.913
+    - _ReflectionStrength: 1.04
     - _SkyExposure: 0.85
     - _SkyRotation: 0
     - _Smoothness: 0.851
@@ -157,18 +160,18 @@ Material:
     - _TotalAmplitude: 0.41599682
     - _UseSkyTex: 2
     - _WaveCount: 46
-    - _WaveTime: 16.435703
+    - _WaveTime: 9.22724
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _DeepColor: {r: 0.021181917, g: 0.26415092, b: 0.039871853, a: 1}
+    - _DeepColor: {r: 0.08851013, g: 0.1848598, b: 0.3679245, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FoamColor: {r: 1, g: 1, b: 0.5801887, a: 0.50980395}
     - _FoamMapParams: {r: 0, g: 0, b: 0, a: 0}
-    - _ShallowColor: {r: 0.17412782, g: 0.3907913, b: 0.4056604, a: 1}
+    - _ShallowColor: {r: 0.2807049, g: 0.4327784, b: 0.7169812, a: 1}
     - _SkyTint: {r: 0.5254902, g: 0.7333333, b: 0.8392157, a: 0.5}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
