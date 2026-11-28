@@ -111,7 +111,7 @@ Material:
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
     - _Cull: 2
-    - _CullMargin: 2.9374707
+    - _CullMargin: 3.0066743
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
@@ -150,13 +150,14 @@ Material:
     - _SrcBlendAlpha: 1
     - _Surface: 0
     - _TessEdgeLength: 0.04
-    - _TessMax: 64
+    - _TessMax: 45
     - _TessMaxDist: 44.79
     - _TessMinDist: 12.33
-    - _TotalAmplitude: 0.396
+    - _TessPixels: 6.1
+    - _TotalAmplitude: 0.41599682
     - _UseSkyTex: 2
     - _WaveCount: 46
-    - _WaveTime: 29.585491
+    - _WaveTime: 16.435703
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1

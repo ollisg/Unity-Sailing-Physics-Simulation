@@ -6,7 +6,8 @@ using UnityEngine;
 /// match the GPU surface.
 ///
 /// The real wind (WeatherController) is never applied directly. A "sea state" chases it:
-///  - wind speed sets the peak wavelength, longest wave and wave height (Pierson-Moskowitz sea),
+///  - wind speed sets the peak wavelength, longest wave (Pierson-Moskowitz sea) and the wave
+///    height (fitted to the WMO Beaufort table, see Height Coefficient / Height Exponent),
 ///  - when the sea is still catching up to a stronger wind it is steeper, when it is settling
 ///    after the wind dropped it is flatter,
 ///  - every wave turns towards a new wind direction at its own pace: short chop follows quickly,
@@ -59,7 +60,15 @@ public class GerstnerWaveController : MonoBehaviour
     [Min(5f)] public float maxWavelengthLimit = 200f;
     [Tooltip("Multiplies the wavelength the wind builds (0.83 x windspeed^2 metres at 1). Lower = shorter, choppier sea, e.g. a small lake.")]
     [Min(0.05f)] public float wavelengthScale = 1f;
-    [Tooltip("Multiplies the wave height the wind builds (0.022 x windspeed^2 metres at 1).")]
+    [Tooltip("Significant wave height = Height Coefficient x windspeed ^ Height Exponent (metres, m/s).\n" +
+             "Defaults 0.0425 and 1.66 fit the WMO Beaufort table's probable wave heights for the open sea " +
+             "(force 4 ~1 m, 6 ~3 m, 8 ~5.5 m, 10 ~9 m, 12 ~14 m).\n" +
+             "0.022 and 2 give the Pierson-Moskowitz fully developed sea (days of wind, unlimited fetch): " +
+             "about 60% higher in strong wind.")]
+    [Min(0f)] public float heightCoefficient = 0.0425f;
+    [Tooltip("See Height Coefficient.")]
+    [Range(1f, 2.5f)] public float heightExponent = 1.66f;
+    [Tooltip("Multiplies the wave height from the formula above, e.g. below 1 for a lake or small sea with little fetch.")]
     [Min(0f)] public float heightScale = 1f;
 
     [Header("Steepness (growing / steady / decaying sea)")]
@@ -429,7 +438,8 @@ public class GerstnerWaveController : MonoBehaviour
         float limit = Mathf.Max(maxWavelengthLimit, lo * 4f);
         float peak = Mathf.Clamp(wavelengthScale * 0.83f * _seaSpeed * _seaSpeed, lo * 3f, limit * 0.5f);
         float hi = Mathf.Clamp(peak * 3f, lo * 4f, limit);
-        float hs = heightScale * 0.022f * _seaSpeed * _seaSpeed * (steep / Mathf.Max(steepnessSteady, 0.005f));
+        float hs = heightScale * heightCoefficient * Mathf.Pow(_seaSpeed, heightExponent)
+                 * (steep / Mathf.Max(steepnessSteady, 0.005f));
 
         float logLo = Mathf.Log(lo);
         float logHi = Mathf.Log(hi);

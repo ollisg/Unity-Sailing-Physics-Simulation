@@ -29,6 +29,13 @@ public class BoomRig : MassSource
     public Transform mast;
     [Tooltip("Optional. Leave empty to use the boom end closest to the mast.")]
     public Transform gooseneck;
+    [Tooltip("Simulate the sail as cloth (SailCloth) instead of turning it as one rigid piece.")]
+    public bool useSailCloth = true;
+    [Tooltip("Turn the mast with the boom and sail, around the lower mast's axis. The ILCA mast is " +
+             "unstayed and round, so it rotates freely in its step and its bend always follows the sail.")]
+    public bool rotateMast = true;
+    [Tooltip("Other parts that turn with the mast (found by name: MastCurve).")]
+    public Transform[] rotateWithMast;
 
     [Header("Mass (estimates: check against class data)")]
     [Min(0f)] public float boomMass = 3f;
@@ -39,6 +46,13 @@ public class BoomRig : MassSource
     [Range(0f, 90f)] public float sheetMaxAngle = 30f;
     [Tooltip("Bounce when the boom hits the sheet limit (0 = stops dead, 1 = full bounce).")]
     [Range(0f, 1f)] public float stopRestitution = 0.15f;
+    [Tooltip("Hits slower than this (degrees per second) don't bounce: the boom just rests on the sheet.")]
+    [Min(0f)] public float minBounceSpeed = 30f;
+
+    [Header("Display")]
+    [Tooltip("Draw the boom between the last two physics steps (like Rigidbody interpolation), " +
+             "so it moves smoothly when the frame rate and physics rate differ.")]
+    public bool interpolate = true;
 
     [Header("Damping")]
     [Tooltip("Gooseneck friction, N·m per rad/s.")]
@@ -80,6 +94,7 @@ public class BoomRig : MassSource
     Quaternion _baseLocalRot;
     float _sign = 1f;
     float _theta, _omega;
+    float _thetaStepPrev;   // angle at the previous physics step (for drawing)
     float _iAxis;
 
     // geometry in pivot space (pivot up = mast axis, forward = boom direction at θ = 0)
@@ -107,8 +122,14 @@ public class BoomRig : MassSource
         if (boat == null) return;
         Transform root = boat.transform;
         if (boom == null) boom = FindDeep(root, "Boom");
+        if (sail == null) sail = FindDeep(root, "Sail");
         if (sail == null) sail = FindDeep(root, "Plane");
         if (mast == null) mast = FindDeep(root, "Mast");
+        if (rotateWithMast == null || rotateWithMast.Length == 0)
+        {
+            var mc = FindDeep(root, "MastCurve");
+            rotateWithMast = mc != null ? new[] { mc } : new Transform[0];
+        }
     }
 
     static Transform FindDeep(Transform root, string name)
@@ -156,10 +177,33 @@ public class BoomRig : MassSource
 
         Vector3 pivotPos = gooseneck != null ? gooseneck.position : near;
 
-        // The sail turns around its luff: the line from the gooseneck to the head of the sail.
-        // (The ILCA mast is raked and bent, so a straight line through the mast mesh would miss
-        // the masthead and the head of the sail would swing away from it.)
-        if (SailHead(root.up, out Vector3 head) && (head - pivotPos).sqrMagnitude > 0.25f)
+        // Cloth sail: its luff follows the mast by itself, so the boom hinges like a real gooseneck:
+        // around the mast's direction there, made perpendicular to the boom so the boom sweeps a
+        // flat plane and keeps its height (the vang holds it down).
+        // Rigid sail: it turns with the boom as one piece, so the axis must run from the gooseneck
+        // to the head of the sail, or the head would swing off the masthead on a raked mast.
+        SailCloth cloth = null;
+        if (sail != null && useSailCloth && sail.GetComponent<Cloth>() == null && sail.GetComponent<MeshFilter>() != null)
+        {
+            cloth = sail.GetComponent<SailCloth>();
+            if (cloth == null) cloth = sail.gameObject.AddComponent<SailCloth>();
+            if (!cloth.enabled) cloth = null;
+        }
+        bool mastTurns = false;
+        if (rotateMast && mast != null && MastAxisAt(pivotPos, root.up, out Vector3 mc2, out Vector3 mt))
+        {
+            // the whole rig (mast, boom, sail) turns around the lower mast's own axis
+            pivotPos = mc2; axis = mt; mastTurns = true;
+            Debug.Log($"BoomRig: mast turns with the rig, axis tilted {Vector3.Angle(mt, root.up):F1}° from the boat's up.", this);
+        }
+        else if (cloth != null)
+        {
+            if (MastTangentAt(pivotPos, root.up, out Vector3 t)) axis = t;
+            Vector3 boomAlong = (far - pivotPos).normalized;
+            Vector3 perp = axis - boomAlong * Vector3.Dot(axis, boomAlong);
+            if (perp.sqrMagnitude > 1e-6f) axis = perp.normalized;
+        }
+        else if (SailHead(root.up, out Vector3 head) && (head - pivotPos).sqrMagnitude > 0.25f)
             axis = (head - pivotPos).normalized;
         if (Vector3.Dot(axis, root.up) < 0f) axis = -axis;
 
@@ -172,18 +216,11 @@ public class BoomRig : MassSource
         _baseLocalRot = _pivot.localRotation;
 
         boom.SetParent(_pivot, true);
-        // A Cloth sail (SkinnedMeshRenderer) is skinned to the boom like a cape to a character,
-        // so its luff stays on the mast. A plain mesh sail just turns with the boom.
-        if (sail != null)
+        if (sail != null && cloth == null) sail.SetParent(_pivot, true);
+        if (mastTurns)
         {
-            bool skinned = false;
-            if (sail.GetComponent<SkinnedMeshRenderer>() != null)
-            {
-                var skin = sail.GetComponent<SailClothSkinning>();
-                if (skin == null) skin = sail.gameObject.AddComponent<SailClothSkinning>();
-                skinned = skin.Setup(root, _pivot);
-            }
-            if (!skinned) sail.SetParent(_pivot, true);
+            mast.SetParent(_pivot, true);
+            foreach (var t in rotateWithMast) if (t != null) t.SetParent(_pivot, true);
         }
 
         // positive θ = boom tip towards the boat's +X
@@ -197,9 +234,59 @@ public class BoomRig : MassSource
         _iAxis = AxisInertia();
         inertiaAboutMast = _iAxis;
         _ready = true;
+
+        if (cloth != null && !cloth.Init(this, root, _pivot, mast, sailMass, mastTurns))
+        {
+            Debug.LogWarning("BoomRig: sail cloth couldn't start; the sail turns rigidly with the boom instead.", this);
+            sail.SetParent(_pivot, true);
+        }
     }
 
-    // The sail's mesh from a MeshFilter, or from a SkinnedMeshRenderer (needed by the Cloth component).
+    // Centre of the mast at the height of 'point' and its direction there (world space).
+    bool MastAxisAt(Vector3 point, Vector3 up, out Vector3 centre, out Vector3 tangent)
+    {
+        centre = point; tangent = up;
+        if (!MastTangentAt(point, up, out tangent)) return false;
+        var mesh = mast.GetComponent<MeshFilter>().sharedMesh;
+        float h = Vector3.Dot(point, up);
+        Vector3 sum = Vector3.zero; int n = 0;
+        foreach (var v in mesh.vertices)
+        {
+            Vector3 w = mast.TransformPoint(v);
+            if (Mathf.Abs(Vector3.Dot(w, up) - h) < 0.1f) { sum += w; n++; }
+        }
+        if (n == 0) return false;
+        centre = sum / n;
+        return true;
+    }
+
+    // Direction of the mast's centre line around the height of 'point' (world space), from the
+    // average of the mast mesh's vertices just below and just above that height.
+    bool MastTangentAt(Vector3 point, Vector3 up, out Vector3 tangent)
+    {
+        tangent = up;
+        var mf = mast != null ? mast.GetComponent<MeshFilter>() : null;
+        var mesh = mf != null ? mf.sharedMesh : null;
+        if (mesh == null || !(mesh.isReadable || Application.isEditor)) return false;
+
+        float h = Vector3.Dot(point, up);
+        Vector3 below = Vector3.zero, above = Vector3.zero;
+        int nb = 0, na = 0;
+        foreach (var v in mesh.vertices)
+        {
+            Vector3 w = mast.TransformPoint(v);
+            float d = Vector3.Dot(w, up) - h;
+            if (d > -0.6f && d < -0.1f) { below += w; nb++; }
+            else if (d > 0.1f && d < 0.6f) { above += w; na++; }
+        }
+        if (nb == 0 || na == 0) return false;
+        Vector3 dir = above / na - below / nb;
+        if (dir.sqrMagnitude < 1e-6f) return false;
+        tangent = dir.normalized;
+        return true;
+    }
+
+    // The sail's mesh from a MeshFilter or a SkinnedMeshRenderer.
     static Mesh SharedMesh(Transform t)
     {
         if (t == null) return null;
@@ -290,6 +377,10 @@ public class BoomRig : MassSource
         float dt = Time.fixedDeltaTime;
         if (dt <= 0f) return;
 
+        // physics works on the exact angle, not the interpolated one shown last frame
+        _thetaStepPrev = _theta;
+        ApplyAngle(_theta);
+
         Vector3 axis = _pivot.up;
         Vector3 p = _pivot.position;
 
@@ -316,11 +407,21 @@ public class BoomRig : MassSource
         _omega += tauTheta / _iAxis * dt;
         _theta += _omega * dt;
 
+        // sheet limit: hard hits bounce a little, slow ones (e.g. wind holding the boom out) rest
         float limit = sheetMaxAngle * Mathf.Deg2Rad;
-        if (_theta > limit) { _theta = limit; if (_omega > 0f) _omega = -_omega * stopRestitution; }
-        else if (_theta < -limit) { _theta = -limit; if (_omega < 0f) _omega = -_omega * stopRestitution; }
+        float minBounce = minBounceSpeed * Mathf.Deg2Rad;
+        if (_theta > limit)
+        {
+            _theta = limit;
+            if (_omega > 0f) _omega = _omega > minBounce ? -_omega * stopRestitution : 0f;
+        }
+        else if (_theta < -limit)
+        {
+            _theta = -limit;
+            if (_omega < 0f) _omega = -_omega > minBounce ? -_omega * stopRestitution : 0f;
+        }
 
-        _pivot.localRotation = _baseLocalRot * Quaternion.AngleAxis(_sign * _theta * Mathf.Rad2Deg, Vector3.up);
+        ApplyAngle(_theta);
 
         // Skipped while the placeholder wind is on: its force is not applied to the hull, so
         // passing only the sheet's share of it to the hull would leave a lopsided torque.
@@ -337,6 +438,20 @@ public class BoomRig : MassSource
         angularSpeedDeg = _omega * Mathf.Rad2Deg;
     }
 
+    void ApplyAngle(float theta)
+    {
+        _pivot.localRotation = _baseLocalRot * Quaternion.AngleAxis(_sign * theta * Mathf.Rad2Deg, Vector3.up);
+    }
+
+    // Drawing: between the last two physics steps
+    void Update()
+    {
+        if (!_ready || !interpolate) return;
+        float dt = Time.fixedDeltaTime;
+        float a = dt > 0f ? Mathf.Clamp01((Time.time - Time.fixedTime) / dt) : 1f;
+        ApplyAngle(Mathf.Lerp(_thetaStepPrev, _theta, a));
+    }
+
     // Torque about the mast axis on a point mass, seen from the moving boat:
     // gravity minus the frame's acceleration at that point, minus the Coriolis force.
     static float InertialTorque(Vector3 x, float m, Vector3 pivot, Vector3 axis, Vector3 com,
@@ -351,13 +466,16 @@ public class BoomRig : MassSource
     }
 
     // Flat-plate normal force on the sail from the apparent wind, as torque about the mast.
+    // The apparent wind includes the sail's own swinging speed, which gives the real aerodynamic
+    // damping of a swinging sail; without it the boom sways around the luffing angle almost undamped.
     float SimpleWindTorque(Vector3 pivot, Vector3 axis)
     {
         var weather = WeatherController.Instance;
         if (weather == null || sailArea <= 0f) return 0f;
 
         Vector3 ce = _pivot.TransformPoint(_sailCom);
-        Vector3 app = weather.WindVector - boat.GetPointVelocity(ce);
+        Vector3 boomSwing = Vector3.Cross(axis * (_sign * _omega), ce - pivot);
+        Vector3 app = weather.WindVector - boat.GetPointVelocity(ce) - boomSwing;
         app = Vector3.ProjectOnPlane(app, axis);
         float speed = app.magnitude;
         if (speed < 0.05f) return 0f;

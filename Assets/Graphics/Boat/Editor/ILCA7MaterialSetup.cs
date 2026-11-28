@@ -15,7 +15,8 @@ public class ILCA7MaterialSetup : AssetPostprocessor
     static readonly string[,] PartMaterials =
     {
         { "Hull1",    "ILCA7_Hull"  },
-        { "Plane",    "ILCA7_Sail"  },
+        { "Sail",     "ILCA7_Sail"  },
+        { "Plane",    "ILCA7_Sail"  }, // old sail model
         { "Mast",     "ILCA7_Spars" },
         { "Boom",     "ILCA7_Spars" },
         { "Cube",     "ILCA7_Foils" }, // centreboard
